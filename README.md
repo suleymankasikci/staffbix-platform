@@ -529,11 +529,12 @@ Honest notes, because a README that only lists wins isn't useful:
   drizzle-kit downgrade to 0.18.1, which is a larger regression than the
   risk — these affect the local dev server, not the built application.
   Production dependencies report zero.
-- **The i18n audit is advisory in CI.** It currently reports 144
-  candidate hardcoded strings, and a meaningful share are false
-  positives — the detector matches JSX-adjacent code fragments, not just
-  user-facing copy. It runs on every push and prints its report, but it
-  does not fail the build until that list is triaged.
+- **44 strings are still untranslated.** The Reports page, the product
+  tour, four dialog "Close" labels on the security settings page, and the
+  "Anonymous" contact fallback ship English in a 23-locale product. Those
+  four files carry named exemptions in `scripts/i18n-audit.mjs` with the
+  counts written down, so the audit still fails the build on any *new*
+  hardcoded string elsewhere.
 - **Lint warnings.** Four `window.location.href` navigations flagged by
   `eslint-config-next` 16.3.1. They are intentional full-page reloads
   after state-changing admin actions.
