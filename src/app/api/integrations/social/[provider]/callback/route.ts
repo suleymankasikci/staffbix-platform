@@ -97,7 +97,6 @@ export async function GET(req: NextRequest, ctx: Ctx): Promise<NextResponse> {
           scope: token.scope,
           userId: me.id,
           username: me.username,
-          verifiedType: me.verifiedType,
         },
         metadata: { username: me.username },
       });

@@ -16,7 +16,7 @@ import {
 } from "../integrations/whatsapp";
 import { decryptForTenant } from "../crypto/encrypt";
 import { getActiveByKind, updateSecret } from "../integrations/manage";
-import { postTweet, tweetLimitFor } from "../integrations/twitter";
+import { postTweet } from "../integrations/twitter";
 import { postLinkedInShare } from "../integrations/linkedin";
 import { refreshTwitterToken } from "../integrations/social-oauth";
 import { logSecurityEvent } from "../audit/log";
@@ -395,13 +395,9 @@ async function dispatchWhatsAppReply(action: WorkerAction): Promise<void> {
  * rather than silently reporting success. No fixtures, no stubs.
  */
 async function dispatchSocialPost(action: WorkerAction): Promise<void> {
-  const payload = (action.payload ?? {}) as { channel?: string; link?: string };
+  const payload = (action.payload ?? {}) as { channel?: string };
   const channel = (payload.channel ?? "unknown").toLowerCase();
   const text = action.content;
-  // Optional "read the rest here" target. Whoever drafts the post sets
-  // it; when the draft has to be shortened to fit a free X account it is
-  // appended so the post still leads somewhere.
-  const link = typeof payload.link === "string" ? payload.link : null;
 
   if (channel === "twitter" || channel === "x") {
     const found = await getActiveByKind({
@@ -443,15 +439,7 @@ async function dispatchSocialPost(action: WorkerAction): Promise<void> {
       });
     }
 
-    // A free account caps at 280 characters and an AI-drafted post has no
-    // notion of that. Rather than failing the action, postTweet shortens
-    // the draft to fit and appends `link`.
-    const result = await postTweet({
-      accessToken,
-      text,
-      limit: tweetLimitFor(found.secret.verifiedType),
-      link,
-    });
+    const result = await postTweet({ accessToken, text });
     await logSecurityEvent({
       kind: "social.post.published",
       tenantId: action.tenantId,
@@ -460,9 +448,6 @@ async function dispatchSocialPost(action: WorkerAction): Promise<void> {
         channel: "twitter",
         postId: result.id,
         workerActionId: action.id,
-        // Recorded so the owner can see in the audit feed that what went
-        // out was not the full draft they approved.
-        truncated: result.truncated,
       },
     });
     return;
