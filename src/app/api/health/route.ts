@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { HeadBucketCommand } from "@aws-sdk/client-s3";
 import { db } from "@/lib/db/client";
 import { redis } from "@/lib/queue/redis";
-import { r2, R2_BUCKET } from "@/lib/storage/r2";
+import { r2, r2Bucket } from "@/lib/storage/r2";
 import { stripe } from "@/lib/stripe/client";
 import { sql } from "drizzle-orm";
 
@@ -113,7 +113,7 @@ async function checkOpenAI(): Promise<CheckResult> {
 
 async function checkR2(): Promise<CheckResult> {
   return timed(async () => {
-    await r2.send(new HeadBucketCommand({ Bucket: R2_BUCKET }));
+    await r2().send(new HeadBucketCommand({ Bucket: r2Bucket() }));
   });
 }
 

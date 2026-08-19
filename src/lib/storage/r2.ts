@@ -21,40 +21,65 @@ import { randomBytes } from "node:crypto";
  * stored in env for the day a tenant opts into public sharing.
  */
 
-const accountId = process.env.R2_ACCOUNT_ID;
-const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-const bucket = process.env.R2_BUCKET_TENANT;
-
-if (
-  process.env.NODE_ENV !== "test" &&
-  (!accountId || !accessKeyId || !secretAccessKey || !bucket)
-) {
-  throw new Error(
-    "R2 env vars missing. Need R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_TENANT.",
-  );
-}
-
 declare global {
   var __staffbix_r2__: S3Client | undefined;
 }
 
-export const r2: S3Client =
-  globalThis.__staffbix_r2__ ??
-  new S3Client({
+/**
+ * Client and bucket name are resolved on first use, not at import.
+ *
+ * They used to be module-level constants guarded by a `throw`, which
+ * meant importing this file with no R2 credentials killed the process.
+ * `next build` imports every route to collect its config, so a build
+ * machine could not produce a bundle without production storage
+ * credentials — CI had none and the build job failed before it ever
+ * reached the compile. Deferring the check keeps the same loud failure
+ * for anyone who actually calls R2, and lets a build run without
+ * secrets it does not need.
+ */
+function r2Config(): {
+  accountId: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  bucket: string;
+} {
+  const accountId = process.env.R2_ACCOUNT_ID;
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+  const bucket = process.env.R2_BUCKET_TENANT;
+  if (!accountId || !accessKeyId || !secretAccessKey || !bucket) {
+    throw new Error(
+      "R2 env vars missing. Need R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_TENANT.",
+    );
+  }
+  return { accountId, accessKeyId, secretAccessKey, bucket };
+}
+
+/** Lazily-constructed S3 client. Throws if R2 env vars are missing. */
+export function r2(): S3Client {
+  const cached = globalThis.__staffbix_r2__;
+  if (cached) return cached;
+
+  const cfg = r2Config();
+  const client = new S3Client({
     region: "auto",
-    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+    endpoint: `https://${cfg.accountId}.r2.cloudflarestorage.com`,
     credentials: {
-      accessKeyId: accessKeyId!,
-      secretAccessKey: secretAccessKey!,
+      accessKeyId: cfg.accessKeyId,
+      secretAccessKey: cfg.secretAccessKey,
     },
   });
 
-if (process.env.NODE_ENV !== "production") {
-  globalThis.__staffbix_r2__ = r2;
+  // Reuse across HMR reloads in dev; in production each process builds
+  // its own and keeps it for the process lifetime.
+  globalThis.__staffbix_r2__ = client;
+  return client;
 }
 
-export const R2_BUCKET: string = bucket!;
+/** Tenant bucket name. Throws if R2 env vars are missing. */
+export function r2Bucket(): string {
+  return r2Config().bucket;
+}
 
 /**
  * Build a tenant-scoped key. Always include the tenantId — listing
@@ -79,9 +104,9 @@ export async function uploadObject(args: {
   body: Uint8Array | string;
   contentType: string;
 }): Promise<void> {
-  await r2.send(
+  await r2().send(
     new PutObjectCommand({
-      Bucket: R2_BUCKET,
+      Bucket: r2Bucket(),
       Key: args.key,
       Body: args.body,
       ContentType: args.contentType,
@@ -90,17 +115,17 @@ export async function uploadObject(args: {
 }
 
 export async function downloadObject(key: string): Promise<Uint8Array> {
-  const res = await r2.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }));
+  const res = await r2().send(new GetObjectCommand({ Bucket: r2Bucket(), Key: key }));
   return res.Body!.transformToByteArray();
 }
 
 export async function deleteObject(key: string): Promise<void> {
-  await r2.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: key }));
+  await r2().send(new DeleteObjectCommand({ Bucket: r2Bucket(), Key: key }));
 }
 
 export async function objectExists(key: string): Promise<boolean> {
   try {
-    await r2.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: key }));
+    await r2().send(new HeadObjectCommand({ Bucket: r2Bucket(), Key: key }));
     return true;
   } catch (e) {
     const err = e as { name?: string; $metadata?: { httpStatusCode?: number } };
@@ -119,9 +144,9 @@ export async function listObjectsByPrefix(prefix: string): Promise<string[]> {
   const out: string[] = [];
   let continuationToken: string | undefined;
   do {
-    const res = await r2.send(
+    const res = await r2().send(
       new ListObjectsV2Command({
-        Bucket: R2_BUCKET,
+        Bucket: r2Bucket(),
         Prefix: prefix,
         ContinuationToken: continuationToken,
       }),
