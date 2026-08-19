@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── 1. Lint + typecheck — fast, needs no secrets ─────────────────────────
+  lint-typecheck:
+    name: Lint + typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: i18n audit
+        run: npm run i18n:audit
+
+  # ── 2. Production build ──────────────────────────────────────────────────
+  build:
+    name: Production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: lint-typecheck
+    # Most env vars aren't read at import time, but a few modules lazy-init
+    # Stripe and Redis clients. With empty values those fail on first call,
+    # not during the build — placeholders keep the failure mode obvious.
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/build_only
+      REDIS_URL: redis://localhost:6379
+      SESSION_HASH_PEPPER: "0000000000000000000000000000000000000000000000000000000000000000"
+      TENANT_KEK_MASTER: "0000000000000000000000000000000000000000000000000000000000000000"
+      STRIPE_SECRET_KEY: sk_test_build_placeholder
+      STRIPE_WEBHOOK_SECRET: whsec_build_placeholder
+      OPENAI_API_KEY: sk-build-placeholder
+      MOBILE_JWT_PRIVATE_KEY: build-placeholder
+      MOBILE_JWT_PUBLIC_KEY: build-placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Build
+        run: npm run build
+
+  # ── 3. Schema drift + migration replay against a scratch Postgres ────────
+  drizzle-check:
+    name: Drizzle schema check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        # pgvector preinstalled so the `CREATE EXTENSION vector` migration
+        # can actually apply.
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: staffbix_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/staffbix_ci
+      SESSION_HASH_PEPPER: "0000000000000000000000000000000000000000000000000000000000000000"
+      TENANT_KEK_MASTER: "0000000000000000000000000000000000000000000000000000000000000000"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Drizzle check (no drift)
+        run: npm run db:check
+
+      - name: Apply migrations to scratch DB
+        run: npm run db:migrate
