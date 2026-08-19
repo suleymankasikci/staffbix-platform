@@ -28,6 +28,12 @@ jobs:
       - name: Install
         run: npm ci
 
+      # Before lint: a leaked credential is the one failure you cannot
+      # fix by pushing a follow-up commit. GitHub's push protection
+      # only runs after the push and only covers partnered providers.
+      - name: Secret scan
+        run: npm run scan:secrets
+
       - name: Lint
         run: npm run lint
 

@@ -29,6 +29,13 @@ export interface TwitterCredentials {
   scope: string;
   userId: string;
   username: string;
+  /**
+   * X account tier, captured at connect time. Drives the character cap
+   * when publishing — free accounts stop at 280. Optional because
+   * integrations connected before this field existed don't carry it;
+   * publishing treats a missing value as free, which is the safe guess.
+   */
+  verifiedType?: "none" | "blue" | "business" | "government";
 }
 
 export interface LinkedInCredentials {

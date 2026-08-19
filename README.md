@@ -546,6 +546,16 @@ Honest notes, because a README that only lists wins isn't useful:
 
 ## License
 
-Source-available, all rights reserved — see [LICENSE](LICENSE). You may
-read, clone, and evaluate it. Commercial use, redistribution, and hosting
-it as a service require written permission.
+Copyright (c) 2026 Staffbix. Licensed under the
+**GNU Affero General Public License v3.0** — see [LICENSE](LICENSE).
+
+You can read it, run it, modify it, and build on it, commercially
+included. The one obligation that matters: AGPL §13 extends copyleft
+across the network, so if you run a modified version as a service that
+other people use, those users are entitled to your modified source. Keep
+it private and use it yourself, and nothing is triggered.
+
+Staffbix is the sole copyright holder and is not bound by its own
+copyleft, so the hosted product at staffbix.com stays proprietary. If
+AGPL doesn't fit your use, ask about a commercial licence by opening an
+issue.

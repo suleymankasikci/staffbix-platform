@@ -2,6 +2,7 @@
   "name": "staffbix",
   "version": "0.1.0",
   "private": true,
+  "license": "AGPL-3.0-only",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -16,7 +17,8 @@
     "db:studio": "drizzle-kit studio",
     "db:check": "drizzle-kit check",
     "worker": "tsx src/worker/index.ts",
-    "worker:dev": "tsx watch src/worker/index.ts"
+    "worker:dev": "tsx watch src/worker/index.ts",
+    "scan:secrets": "node scripts/scan-secrets.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.2",
